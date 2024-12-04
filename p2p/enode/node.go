@@ -22,13 +22,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/rlp"
 	"math/bits"
 	"net"
 	"net/netip"
 	"strings"
-
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var errMissingPrefix = errors.New("missing 'enr:' prefix for base64-encoded record")
@@ -38,9 +37,10 @@ type Node struct {
 	r  enr.Record
 	id ID
 	// endpoint information
-	ip  netip.Addr
-	udp uint16
-	tcp uint16
+	ip       netip.Addr
+	udp      uint16
+	tcp      uint16
+	hostname string
 }
 
 // New wraps a node record. The record must be valid according to the given
@@ -184,6 +184,22 @@ func (n *Node) TCP() int {
 	return int(n.tcp)
 }
 
+// Endpoint returns the hostname of the node if set, otherwise the IP address.
+func (n *Node) Endpoint() string {
+	if n.hostname != "" {
+		return n.hostname
+	}
+	if n.ip.IsValid() {
+		return n.ip.String()
+	}
+	return ""
+}
+
+// NeedResolve checks if the node requires DNS resolution.
+func (n *Node) NeedResolve() bool {
+	return n.hostname != "" //TODO: Add check for n.ip.IsValid(), but we need to implement invalidation for the previous resolved IP
+}
+
 // UDPEndpoint returns the announced UDP endpoint.
 func (n *Node) UDPEndpoint() (netip.AddrPort, bool) {
 	if !n.ip.IsValid() || n.ip.IsUnspecified() || n.udp == 0 {
@@ -228,6 +244,9 @@ func (n *Node) Pubkey() *ecdsa.PublicKey {
 func (n *Node) Record() *enr.Record {
 	cpy := n.r
 	return &cpy
+}
+func (n *Node) Hostname() string {
+	return n.hostname
 }
 
 // ValidateComplete checks whether n has a valid IP and UDP port.
